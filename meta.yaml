@@ -1,0 +1,26 @@
+package:
+    name: "nba_gateway"
+    version: "0.1"
+
+source:
+    path: ../src
+    git_url: https://github.com/pdenno/nba_gateway
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
+
+
+requirements:
+  build:
+    - python
+    - pip
+    - setuptools
+    
+  run:
+    - python
+
+about:
+    home: https://github.com/pdenno/nba_gateway/
+    license: Mozilla Public License 2.0 (MPL 2.0)
+    
