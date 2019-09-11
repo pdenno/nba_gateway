@@ -8,8 +8,8 @@ import json
 from io import StringIO
 import sys
 import asyncio
-import nest_asyncio
-nest_asyncio.apply()
+#import nest_asyncio
+#nest_asyncio.apply()
 
 class NBAgateway(object):
     def __init__(self,port):
@@ -18,27 +18,27 @@ class NBAgateway(object):
         self.sock = None
         self.keep_running = False
         self.ctx = zmq.Context()
+        self.sock = self.ctx.socket(zmq.REP)
+        self.sock.bind(self.endpoint)
 
     async def listen(self):
         print('NBAgateway listening on port', self.port)
         print('context is %s' % (self.ctx,))
-        self.sock = self.ctx.socket(zmq.REP)
-        self.sock.bind(self.endpoint)
-        self.keep_running = True
         print('socket is %s' % (self.sock,))
+        self.keep_running = True
         while self.keep_running:
             try:
-                await asyncio.sleep(4)
+                await asyncio.sleep(0.5)
                 try:
-                    msg = self.sock.recv(flags=zmq.NOBLOCK, track=True)
+                    msg = self.sock.recv(flags=zmq.NOBLOCK)
                     print('Past the recv()!!!!! msg = %s' % (msg,))
                     msg = json.loads(msg)
                 except zmq.ZMQError as e:
-                    print(' exception is %s' % (e,))
+                    #print(' exception is %s' % (e,))
                     msg = False
-                finally:
-                    print('In finally, msg = %s' % (msg,))
-                print('msg or False: %s' % (msg,))
+                #finally:
+                #    print('In finally, msg = %s' % (msg,))
+                #print('msg or False: %s' % (msg,))
                 if msg:
                     if (msg['cmd'] == 'stop'):               # stop 
                         print("Stopping NBAgateway")
@@ -46,7 +46,20 @@ class NBAgateway(object):
                     elif (msg['cmd'] == 'put_val'):          # put_val
                         var = msg['var']
                         val = msg['val']
-                        print('var = %s, val = %s' % (var, val))
+                        module = sys.modules[__name__]
+                        setattr(module, var, val)
+                        #if (isinstance(val,str)):
+                        #    estr = '%s = "%s"' % (var, val)
+                        #else:
+                        #    estr = '%s = %s' % (var, val)
+                        #print('estr = ', estr)
+                        #exec(estr)
+                        #if (isinstance(val,str)):
+                        #    gstr = 'globals()["%s"] = "%s"' % (var, val)
+                        #else:
+                        #    gstr = 'globals()["%s"] = %s' % (var, val)
+                        #print('gstr = ', gstr)
+                        #exec(gstr)
                         globals()[var] = val
                         self.sock.send_string('"OK"')
                     elif (msg['cmd'] == 'get_val'):          # get_val
