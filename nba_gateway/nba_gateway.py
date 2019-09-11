@@ -1,15 +1,8 @@
 
-import socket
-from contextlib import closing    
-import time
-import threading
 import zmq
 import json
-from io import StringIO
 import sys
 import asyncio
-#import nest_asyncio
-#nest_asyncio.apply()
 
 class NBAgateway(object):
     def __init__(self,port):
@@ -34,11 +27,7 @@ class NBAgateway(object):
                     print('Past the recv()!!!!! msg = %s' % (msg,))
                     msg = json.loads(msg)
                 except zmq.ZMQError as e:
-                    #print(' exception is %s' % (e,))
                     msg = False
-                #finally:
-                #    print('In finally, msg = %s' % (msg,))
-                #print('msg or False: %s' % (msg,))
                 if msg:
                     if (msg['cmd'] == 'stop'):               # stop 
                         print("Stopping NBAgateway")
@@ -48,18 +37,6 @@ class NBAgateway(object):
                         val = msg['val']
                         module = sys.modules[__name__]
                         setattr(module, var, val)
-                        #if (isinstance(val,str)):
-                        #    estr = '%s = "%s"' % (var, val)
-                        #else:
-                        #    estr = '%s = %s' % (var, val)
-                        #print('estr = ', estr)
-                        #exec(estr)
-                        #if (isinstance(val,str)):
-                        #    gstr = 'globals()["%s"] = "%s"' % (var, val)
-                        #else:
-                        #    gstr = 'globals()["%s"] = %s' % (var, val)
-                        #print('gstr = ', gstr)
-                        #exec(gstr)
                         globals()[var] = val
                         self.sock.send_string('"OK"')
                     elif (msg['cmd'] == 'get_val'):          # get_val
@@ -76,8 +53,6 @@ class NBAgateway(object):
             except Exception as e:
                 print('NBAgateway could not respond. Stopping. Exception: = %s' % (e,))
                 self.stop_server()
-#            finally:
-#                self.sock.close()
 
     async def start_listening(self):
         task = asyncio.create_task(self.listen())
@@ -90,4 +65,3 @@ class NBAgateway(object):
     def stop_server(self):
         print('Stopping server.')
         self.keep_running = False
- #       self.sock.close()
