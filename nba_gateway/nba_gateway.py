@@ -44,12 +44,10 @@ class NBAgateway():
                         self.sock.send_string('"OK"')
                     elif (msg['cmd'] == 'get_val'):          # get_val
                         var = msg['var']
-                        if (var in (globals)()):
-                            self.sock.send_string(json.dumps(globals()[var]))
-                        else:
-                            self.sock.send_string('"UNKNOWN_VAR"')
+                        module = sys.modules["__main__"]
+                        self.sock.send_string(json.dumps(getattr(module, var, "UNKNOWN_VAR")))
                     else:
-                        self.sock.send_string('"UNKNOWN_CMD"')
+                        self.sock.send_string("UNKNOWN_CMD")
             except Exception as e:
                 print('NBAgateway could not respond. Stopping. Exception: = %s' % (e,))
                 self.stop_server()
