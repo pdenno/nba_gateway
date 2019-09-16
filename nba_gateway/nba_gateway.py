@@ -4,6 +4,7 @@ import json
 import sys
 import asyncio
 import socket
+import numpy
 from contextlib import closing
     
 class NBAgateway():
@@ -45,12 +46,23 @@ class NBAgateway():
                     elif (msg['cmd'] == 'get_val'):          # get_val
                         var = msg['var']
                         module = sys.modules["__main__"]
-                        self.sock.send_string(json.dumps(getattr(module, var, "UNKNOWN_VAR")))
+                        val = getattr(module, var, "UNKNOWN_VAR")
+                        self.sock.send_string(json.dumps(self.numpy2py(val)))
                     else:
                         self.sock.send_string("UNKNOWN_CMD")
             except Exception as e:
                 print('NBAgateway could not respond. Stopping. Exception: = %s' % (e,))
                 self.stop_server()
+
+    def numpy2py(self, val):
+        if isinstance(val, numpy.int64):
+            return int(val)
+        elif isinstance(val, list):
+            return [self.numpy2py(x) for x in val]
+        elif isinstance(val, numpy.ndarray):
+            return self.numpy2py(list(val))
+        else:
+            return val                
 
     async def start_listening(self):
         task = asyncio.create_task(self.listen())
