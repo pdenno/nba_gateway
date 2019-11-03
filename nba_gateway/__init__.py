@@ -1,3 +1,4 @@
 from .nba_gateway import NBAgateway
 
-__version__ = '0.1.0'
+# This isn't being used!
+__version__ = '0.1.2'

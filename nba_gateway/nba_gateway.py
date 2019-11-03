@@ -5,6 +5,8 @@ import sys
 import asyncio
 import socket
 import numpy
+import ast
+import ast2json
 from contextlib import closing
     
 class NBAgateway():
@@ -26,9 +28,9 @@ class NBAgateway():
         self.keep_running = True
         while self.keep_running:
             try:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)  # POD Not good!
                 try:
-                    msg = self.sock.recv(flags=zmq.NOBLOCK) # await here doesn't work
+                    msg = self.sock.recv(flags=zmq.NOBLOCK)  # await here does not work
                     msg = json.loads(msg)
                 except zmq.ZMQError as e:
                     msg = False
@@ -36,6 +38,13 @@ class NBAgateway():
                     if (msg['cmd'] == 'stop'):               # stop 
                         print("Stopping NBAgateway")
                         self.stop_server()
+                    elif (msg['cmd'] == 'parse'):            # parse
+                        try:
+                            tree = ast2json.ast2json(ast.parse(msg['code']))  #do not use ast2json.str2json!
+                        except:
+                            tree = 'invalid-syntax'
+                        s = json.dumps(tree)
+                        self.sock.send_string(s)
                     elif (msg['cmd'] == 'put_val'):          # put_val
                         var = msg['var']
                         val = msg['val']
@@ -62,7 +71,7 @@ class NBAgateway():
         elif isinstance(val, numpy.ndarray):
             return self.numpy2py(list(val))
         else:
-            return val                
+            return val
 
     async def start_listening(self):
         task = asyncio.create_task(self.listen())
