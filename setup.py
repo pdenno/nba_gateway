@@ -5,7 +5,7 @@ from setuptools import setup
 with io.open("README.rst", "rt", encoding="utf8") as f:
     readme = f.read()
 
-version = '0.1.3'
+version = '0.1.4'
 
 setup(
     name="nba_gateway-pdenno",

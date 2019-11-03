@@ -8,9 +8,11 @@ import socket
 import numpy
 import ast
 import ast2json
+import pandas as pd
+import datetime as dt
 from contextlib import closing
 
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 
 class NBAgateway():
@@ -65,10 +67,22 @@ class NBAgateway():
     def numpy2py(self, val):
         if isinstance(val, numpy.int64):
             return int(val)
+        elif callable(val):
+            return("CALLABLE")
+        elif (isinstance(val, pd.Timestamp) or
+              isinstance(val, dt.datetime) or
+              isinstance(val, dt.date)):
+            return({'nba-timepoint': str(val)})
         elif isinstance(val, list):
             return [self.numpy2py(x) for x in val]
         elif isinstance(val, numpy.ndarray):
             return self.numpy2py(list(val))
+        elif isinstance(val, pd.DataFrame):
+            return self.numpy2py(val.to_dict('records'))
+        elif isinstance(val, dict):
+            for k, v in val.items():
+                val[k] = self.numpy2py(val[k])
+            return val
         else:
             return val
 
