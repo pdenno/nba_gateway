@@ -11,8 +11,12 @@ import ast2json
 import pandas as pd
 import datetime as dt
 from contextlib import closing
+from pysat.examples.rc2 import RC2
+from pysat.formula import WCNF
 
-__version__ = '0.1.4'
+# To Do: Write a "sample?" option for tables.
+
+__version__ = '0.1.6'
 
 
 class NBAgateway():
@@ -59,6 +63,22 @@ class NBAgateway():
                     module = sys.modules["__main__"]
                     val = getattr(module, var, "UNKNOWN_VAR")
                     self.sock.send_string(json.dumps(self.numpy2py(val)))
+                elif (msg['cmd'] == 'MAX-SAT'):          # MAX-SAT problem
+                    s = msg['problem']
+                    try:
+                        wcnf = WCNF(from_string=s)
+                        RC2(wcnf).compute()
+                        results = []
+                        cnt = 0
+                        with RC2(wcnf) as rc2:
+                            for m in rc2.enumerate():  # rc2.cost huh?
+                                if (cnt < 10):
+                                    cnt += 1
+                                    results.append({'model': m, 'cost': rc2.cost})
+                                    r = json.dumps(results)
+                    except:
+                        r = 'rc2 failed'
+                    self.sock.send_string(r)
                 else:
                     self.sock.send_string("UNKNOWN_CMD")
             except Exception as e:
@@ -83,6 +103,8 @@ class NBAgateway():
             for k, v in val.items():
                 val[k] = self.numpy2py(val[k])
             return val
+        elif numpy.isnan(val):
+            return({'nba-numpy-nan': 'nan'})
         else:
             return val
 
