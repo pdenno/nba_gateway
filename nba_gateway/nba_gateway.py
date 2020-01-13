@@ -14,9 +14,7 @@ from contextlib import closing
 from pysat.examples.rc2 import RC2
 from pysat.formula import WCNF
 
-# To Do: Write a "sample?" option for tables.
-
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 
 class NBAgateway():
@@ -59,10 +57,14 @@ class NBAgateway():
                     globals()[var] = val   # not sure why both are needed. They are.
                     self.sock.send_string('"OK"')
                 elif (msg['cmd'] == 'get_val'):          # get_val
+                    if ('max' in msg.keys()):
+                        mt = msg['max']
+                    else:
+                        mt = False
                     var = msg['var']
                     module = sys.modules["__main__"]
                     val = getattr(module, var, "UNKNOWN_VAR")
-                    self.sock.send_string(json.dumps(self.numpy2py(val)))
+                    self.sock.send_string(json.dumps(self.numpy2py(val, max_table=mt)))
                 elif (msg['cmd'] == 'MAX-SAT'):          # MAX-SAT problem
                     s = msg['problem']
                     try:
@@ -84,7 +86,7 @@ class NBAgateway():
             except Exception as e:
                 print('NBAgateway could not respond. Exception: = %s' % (e,))
 
-    def numpy2py(self, val):
+    def numpy2py(self, val, max_table=False):
         if isinstance(val, numpy.int64):
             return int(val)
         elif callable(val):
@@ -98,15 +100,24 @@ class NBAgateway():
         elif isinstance(val, numpy.ndarray):
             return self.numpy2py(list(val))
         elif isinstance(val, pd.DataFrame):
-            return self.numpy2py(val.to_dict('records'))
+            if max_table:
+                val = pd.DataFrame(val[0:max_table])
+                return self.numpy2py(val.to_dict('records'))
+            else:
+                return self.numpy2py(val.to_dict('records'))
         elif isinstance(val, dict):
             for k, v in val.items():
                 val[k] = self.numpy2py(val[k])
             return val
-        elif numpy.isnan(val):
-            return({'nba-numpy-nan': 'nan'})
         else:
-            return val
+            try:
+                if numpy.isnan(val):  # Amazing! isnan doesn't except all types!
+                    return({'nba-numpy-nan': 'nan'})
+                else:
+                    return val
+            except:
+                return({'unhandled-type': str(val)})
+
 
     async def start_listening(self):
         task = asyncio.create_task(self.listen())
