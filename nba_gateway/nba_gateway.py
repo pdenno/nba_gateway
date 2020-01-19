@@ -14,7 +14,7 @@ from contextlib import closing
 from pysat.examples.rc2 import RC2
 from pysat.formula import WCNF
 
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 
 
 class NBAgateway():
@@ -30,6 +30,7 @@ class NBAgateway():
         self.ctx = zmq.asyncio.Context()
         self.sock = self.ctx.socket(zmq.REP)
         self.sock.bind(self.endpoint)
+        self.module = sys.modules["__main__"]
 
     async def listen(self):
         print('NB Agent Gateway (nba_gateway) version %s listening on port %s'
@@ -39,52 +40,99 @@ class NBAgateway():
             try:
                 msg = await self.sock.recv()
                 msg = json.loads(msg)
-                if (msg['cmd'] == 'stop'):               # stop
+                if (msg['cmd'] == 'stop'):               # ---stop--
                     print("Stopping NBAgateway")
                     self.stop_server()
-                elif (msg['cmd'] == 'parse'):            # parse
+                elif (msg['cmd'] == 'parse'):            # ---parse--
                     try:  # do not use ast2json.str2json!
                         tree = ast2json.ast2json(ast.parse(msg['code']))
-                    except:
-                        tree = 'invalid-syntax'
-                    s = json.dumps(tree)
-                    self.sock.send_string(s)
-                elif (msg['cmd'] == 'put_val'):          # put_val
+                    except Exception as e:
+                        tree = {'request': 'parse',
+                                'data': msg,
+                                'status': 'invalid-syntax',
+                                'error-msg': str(e)}
+                    self.sock.send_string(json.dumps({'request': 'parse',
+                                                      'data': msg,
+                                                      'status': 'OK',
+                                                      'tree': tree}))
+                elif (msg['cmd'] == 'put_val'):          # ---put_val--
                     var = msg['var']
                     val = msg['val']
-                    module = sys.modules["__main__"]
-                    setattr(module, var, val)
-                    globals()[var] = val   # not sure why both are needed. They are.
-                    self.sock.send_string('"OK"')
-                elif (msg['cmd'] == 'get_val'):          # get_val
+                    setattr(self.module, var, val)
+                    globals()[var] = val   # Both are needed. Strange.
+                    self.sock.send_string(json.dumps({'request': 'put_val',
+                                                      'data': msg,
+                                                      'status': 'OK'}))
+                elif (msg['cmd'] == 'get_val'):          # ---get_val--
                     if ('max' in msg.keys()):
                         mt = msg['max']
                     else:
                         mt = False
-                    var = msg['var']
-                    module = sys.modules["__main__"]
-                    val = getattr(module, var, "UNKNOWN_VAR")
-                    self.sock.send_string(json.dumps(self.numpy2py(val, max_table=mt)))
-                elif (msg['cmd'] == 'MAX-SAT'):          # MAX-SAT problem
+                    val = getattr(self.module, msg['var'], 'UNKNOWN_VAR')
+                    if (type(val) == str) and (val == "UNKNOWN_VAR"):  # can't == a DF to a string!
+                        self.sock.send_string(json.dumps({'request': 'get_val',
+                                                          'data': msg,
+                                                          'status': 'UNKNOWN_VAR'}))
+                    else:
+                        self.sock.send_string(json.dumps({'request': 'get_val',
+                                                          'data': msg,
+                                                          'status': 'OK',
+                                                          'result': self.numpy2py(val, max_table=mt)}))
+                elif (msg['cmd'] == 'var_type'):         # ---var_type--
+                    val = getattr(self.module, msg['var'], "UNKNOWN_VAR")
+                    if (type(val) == str) and (val == "UNKNOWN_VAR"):  # can't == a DF to a string!
+                        self.sock.send_string(json.dumps({'request': 'var_type',
+                                                          'data': msg,
+                                                          'status': 'UNKNOWN_VAR'}))
+                    else:
+                        self.sock.send_string(json.dumps({'request': 'var_type',
+                                                          'data': msg,
+                                                          'status': 'OK',
+                                                          'result': self.type_data(val)}))
+                elif (msg['cmd'] == 'MAX-SAT'):          # --- MAX-SAT problem
                     s = msg['problem']
                     try:
                         wcnf = WCNF(from_string=s)
                         RC2(wcnf).compute()
-                        results = []
+                        result = []
                         cnt = 0
                         with RC2(wcnf) as rc2:
                             for m in rc2.enumerate():  # rc2.cost huh?
                                 if (cnt < 10):
                                     cnt += 1
-                                    results.append({'model': m, 'cost': rc2.cost})
-                                    r = json.dumps(results)
+                                    result.append({'model': m, 'cost': rc2.cost})
                     except:
-                        r = 'rc2 failed'
-                    self.sock.send_string(r)
+                        self.sock.send_string(json.dumps({'request': 'MAX-SAT',
+                                                          'data': msg,
+                                                          'status': 'RC2_FAILED'}))
+                        continue
+                    self.sock.send_string(json.dumps({'request': 'MAX-SAT',
+                                                      'data': msg,
+                                                      'status': 'OK',
+                                                      'result': result}))
                 else:
-                    self.sock.send_string("UNKNOWN_CMD")
+                    self.sock.send_string(json.dumps({'request': msg['cmd'],
+                                                      'data': msg,
+                                                      'status': 'UNKNOWN_CMD'}))
             except Exception as e:
-                print('NBAgateway could not respond. Exception: = %s' % (e,))
+                print('NBAgateway could not respond. Exception: %s\n msg = %s' % (e, msg))
+                self.sock.send_string(json.dumps({'request': msg['cmd'],
+                                                  'data': msg,
+                                                  'status': 'NBA_GATEWAY_FAILED',
+                                                  'error-msg': str(e)}))
+                continue
+
+    def type_data(self, val):
+        try:
+            result = {'type': type(val).__name__}
+            if isinstance(val, pd.DataFrame):
+                result['shape'] = val.shape
+                result['columns'] = val.columns
+            elif isinstance(val, list):
+                result['size'] = len(val)
+            return result
+        except Exception as e:
+            print('type_data, Exception: %s' % (e,))
 
     def numpy2py(self, val, max_table=False):
         if isinstance(val, numpy.int64):
@@ -100,11 +148,9 @@ class NBAgateway():
         elif isinstance(val, numpy.ndarray):
             return self.numpy2py(list(val))
         elif isinstance(val, pd.DataFrame):
-            if max_table:
+            if max_table and (val.shape[0] > max_table):
                 val = pd.DataFrame(val[0:max_table])
-                return self.numpy2py(val.to_dict('records'))
-            else:
-                return self.numpy2py(val.to_dict('records'))
+            return self.numpy2py(val.to_dict('records'))
         elif isinstance(val, dict):
             for k, v in val.items():
                 val[k] = self.numpy2py(val[k])
