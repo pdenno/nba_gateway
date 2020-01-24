@@ -75,7 +75,7 @@ class NBAgateway():
             self.sock.send_string(json.dumps({'request': 'get_val',
                                               'data': msg,
                                               'status': 'OK',
-                                              'result': self.numpy2py(val, max_table=mt)}))
+                                              'result': self.numpy2py(val, max_collection=mt)}))
         logging.info('at end of get_val')
 
     def handle_var_type(self, msg):
@@ -161,7 +161,7 @@ class NBAgateway():
             logging.info('Error in type_data: {0}'.format(e))
             print('type_data, Exception: %s' % (e,))
 
-    def numpy2py(self, val, max_table=False):
+    def numpy2py(self, val, max_collection=False):
         try:
             if isinstance(val, (int, float, str, bool)):
                 return val
@@ -174,12 +174,14 @@ class NBAgateway():
                   isinstance(val, dt.date)):
                 return({'nba-timepoint': str(val)})
             elif isinstance(val, list):
+                if max_collection and (len(val) > max_collection):
+                    val = val[0:max_collection]
                 return [self.numpy2py(x) for x in val]
             elif isinstance(val, numpy.ndarray):
                 return self.numpy2py(list(val))
             elif isinstance(val, pd.DataFrame):
-                if max_table and (val.shape[0] > max_table):
-                    val = pd.DataFrame(val[0:max_table])
+                if max_collection and (val.shape[0] > max_collection):
+                    val = pd.DataFrame(val[0:max_collection])
                 return self.numpy2py(val.to_dict('records'))
             elif isinstance(val, dict):
                 for k, _ in val.items():
