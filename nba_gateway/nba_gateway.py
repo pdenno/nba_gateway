@@ -22,7 +22,7 @@ logging.basicConfig(filename='nba_gateway.log',
                     level=logging.DEBUG,
                     format='%(asctime)s %(message)s')
 
-__version__ = '0.1.9'
+__version__ = '0.1.10'
 
 
 class NBAgateway():
@@ -47,8 +47,24 @@ class NBAgateway():
             logging.info('handle_parse {0}.'.format(msg))
             response['tree'] = ast2json.ast2json(ast.parse(msg['code']))
             response['status'] = 'OK'
-        except:
+        except Exception:
             response['status'] = 'INVALID_SYNTAX'
+        self.sock.send_string(json.dumps(response))
+
+    def handle_eval(self, msg):
+        try:
+            mt = False
+            if ('max' in msg.keys()):
+                mt = msg['max']
+            response = {'request': 'eval_expr', 'data': msg}
+            logging.info('handle_eval {0}.'.format(msg))
+            val = eval(msg['code'], self.module.__dict__)
+            response['result'] = self.numpy2py(val, max_collection=mt)
+            response['status'] = 'OK'
+        except Exception as e:
+            response['status'] = 'EVAL_FAILED'
+            response['error-msg'] = str(e)
+            logging.info('Error in handle_eval: {0}'.format(e))
         self.sock.send_string(json.dumps(response))
 
     def handle_put_val(self, msg):
@@ -126,6 +142,8 @@ class NBAgateway():
                     self.stop_server()
                 elif (msg['request'] == 'parse'):
                     self.handle_parse(msg)
+                elif (msg['request'] == 'eval_expr'):
+                    self.handle_eval(msg)
                 elif (msg['request'] == 'put_val'):
                     self.handle_put_val(msg)
                 elif (msg['request'] == 'get_val'):
@@ -179,6 +197,8 @@ class NBAgateway():
                 return [self.numpy2py(x) for x in val]
             elif isinstance(val, numpy.ndarray):
                 return self.numpy2py(list(val))
+            elif isinstance(val, pd.core.series.Series):
+                return self.numpy2py(dict(val))
             elif isinstance(val, pd.DataFrame):
                 if max_collection and (val.shape[0] > max_collection):
                     val = pd.DataFrame(val[0:max_collection])
