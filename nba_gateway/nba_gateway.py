@@ -22,7 +22,7 @@ logging.basicConfig(filename='nba_gateway.log',
                     level=logging.DEBUG,
                     format='%(asctime)s %(message)s')
 
-__version__ = '0.1.10'
+__version__ = '0.1.11'
 
 
 class NBAgateway():
@@ -44,7 +44,7 @@ class NBAgateway():
     def handle_parse(self, msg):
         try:  # do not use ast2json.str2json!
             response = {'request': 'parse', 'data': msg}
-            logging.info('handle_parse {0}.'.format(msg))
+            # logging.info('handle_parse {0}.'.format(msg)) # Too much output
             response['tree'] = ast2json.ast2json(ast.parse(msg['code']))
             response['status'] = 'OK'
         except Exception:
@@ -92,7 +92,6 @@ class NBAgateway():
                                               'data': msg,
                                               'status': 'OK',
                                               'result': self.numpy2py(val, max_collection=mt)}))
-        logging.info('at end of get_val')
 
     def handle_var_type(self, msg):
         logging.info('handle_var_type {0}.'.format(msg))
@@ -118,9 +117,11 @@ class NBAgateway():
             cnt = 0
             with RC2(wcnf) as rc2:
                 for m in rc2.enumerate():  # rc2.cost huh?
-                    if (cnt < 10):
+                    if (cnt < 11):
                         cnt += 1
                         result.append({'model': m, 'cost': rc2.cost})
+                    else:
+                        break
             response['result'] = result
         except Exception as e:
             response['status'] = 'RC2_FAILED'
